@@ -1,4 +1,5 @@
 #include <Wire.h>
+#include <IBusBM.h>
 
 /*MPU-6050 gives you 16 bits data so you have to create some 16int constants
  * to store the data for accelerations and gyro*/
@@ -12,7 +13,23 @@ float elapsedTime, time, timePrev;
 int i;
 float rad_to_deg = 180/3.141592654;
 
+
+// IBUS stuff
+IBusBM ibusRc;
+HardwareSerial& ibusRcSerial = Serial1;
+
+// READS DATA FROM THE IBUS -------------------------------------------
+int readChannel(byte channelInput, int minLimit, int  maxLimit, int defaultValue){
+  uint16_t ch = ibusRc.readChannel(channelInput);
+  if (ch < 100) return defaultValue;
+  return map(ch, 1000, 2000, minLimit, maxLimit);
+}
+
 void setup() {
+  // IBUS SETUP ------------------------------------------------------
+  ibusRc.begin(ibusRcSerial);
+  // ------------------------------------------------------------------
+
   Wire.begin(); //begin the wire comunication
   Wire.beginTransmission(0x68);
   Wire.write(0x6B);
@@ -104,8 +121,23 @@ void loop() {
   Total_angle[1] = 0.98 *(Total_angle[1] + Gyro_angle[1]*elapsedTime) + 0.02*Acceleration_angle[1];
   
   /*Now we have our angles in degree and values from -10º0 to 100º aprox*/
+  Serial.print("ANLGE: ");
   Serial.print(Total_angle[1]);
   Serial.print(", ");
-  Serial.println(Total_angle[0]);
+  Serial.print(Total_angle[0]);
 
+  // IBUS Test
+  //CHANNEL 2 THROTTLE, CHANNEL 3 YAW, CHANNEL 0 ROLL, CHANNEL 1 PITCH 
+  int throttle = readChannel(2, 0, 80, 0);
+  int yawCtrl = readChannel(3, -100, 100, 0);
+  int rollCtrl = readChannel(0, -100, 100, 0);
+  int pitchCtrl = readChannel(1, -100, 100, 0);
+  Serial.print(" IBUS: ");
+  Serial.print(throttle);
+  Serial.print(", ");
+  Serial.print(yawCtrl);
+  Serial.print(", ");
+  Serial.print(rollCtrl);
+  Serial.print(", ");
+  Serial.println(pitchCtrl);
 }
