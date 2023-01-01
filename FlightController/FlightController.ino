@@ -44,7 +44,7 @@ float roll_pid_d=0;
 double roll_kp=0.7;//3.55
 double roll_ki=0.006;//0.003
 double roll_kd=1.2;//2.05
-float roll_desired_angle = 0;     //This is the angle in which we whant the
+float roll_desired_angle = 0;     //This is the angle in which we want
 
 //////////////////////////////PID FOR PITCH//////////////////////////
 float pitch_PID, pitch_error, pitch_previous_error;
@@ -55,7 +55,7 @@ float pitch_pid_d=0;
 double pitch_kp=0.72;//3.55
 double pitch_ki=0.006;//0.003
 double pitch_kd=1.22;//2.05
-float pitch_desired_angle = 0;     //This is the angle in which we whant the
+float pitch_desired_angle = 0;     //This is the angle in which we want
 
 /*------------------------ Helper Functions ------------------------*/
 
@@ -168,17 +168,21 @@ void loop() {
 
   // Read the IBus channels for the controller input
   // CHANNEL 2 THROTTLE, CHANNEL 3 YAW, CHANNEL 0 ROLL, CHANNEL 1 PITCH
-  int throttleCtrl = readChannel(2, 0, 80, 0);
+  // int throttleCtrl = readChannel(2, 0, 80, 0);
   int yawCtrl = readChannel(3, -100, 100, 0);
-  int rollCtrl = readChannel(0, -100, 100, 0);
-  int pitchCtrl = readChannel(1, -100, 100, 0);
+  // int rollCtrl = readChannel(0, -100, 100, 0);
+  // int pitchCtrl = readChannel(1, -100, 100, 0);
+  // Changed these two temporarily?
+  int throttleCtrl = readChannel(2, 0, 1000, 0);
+  int rollCtrl = readChannel(0, -10, 10, 0);
+  int pitchCtrl = readChannel(1, -10, 10, 0);
 
   /*------------------------ Serial Output for Testing------------------------*/
   
   /*Now we have our angles in degree and values from -100 to 100 degrees*/
-  Serial.print("ANLGE: ");
+  Serial.print("Pitch Angle: ");
   Serial.print(Total_angle[1]);
-  Serial.print(", ");
+  Serial.print(" Roll Angle: ");
   Serial.print(Total_angle[0]);
 
   Serial.print(" IBUS: ");
@@ -188,17 +192,19 @@ void loop() {
   Serial.print(", ");
   Serial.print(rollCtrl);
   Serial.print(", ");
-  Serial.println(pitchCtrl);
+  Serial.print(pitchCtrl);
   
   /*------------------------ PID ------------------------*/
 
-  roll_desired_angle = map(rollCtrl,1000,2000,-10,10);
-  pitch_desired_angle = map(pitchCtrl,1000,2000,-10,10);
+  //  return map(ch, 1000, 2000, minLimit, maxLimit);
+
+  roll_desired_angle = rollCtrl;
+  pitch_desired_angle = pitchCtrl;
 
   /*First calculate the error between the desired angle and 
   *the real measured angle*/
-  roll_error = Total_angle_y - roll_desired_angle;
-  pitch_error = Total_angle_x - pitch_desired_angle;    
+  roll_error = Total_angle[0] - roll_desired_angle;
+  pitch_error = Total_angle[1] - pitch_desired_angle;    
   /*Next the proportional value of the PID is just a proportional constant
   *multiplied by the error*/
   roll_pid_p = roll_kp*roll_error;
@@ -238,16 +244,25 @@ void loop() {
   if(pitch_PID > 400) {pitch_PID=400;}
 
   /*Finnaly we calculate the PWM width. We sum the desired throttle and the PID value*/
-  pwm_R_F  = 115 + input_THROTTLE - roll_PID - pitch_PID;
-  pwm_R_B  = 115 + input_THROTTLE - roll_PID + pitch_PID;
-  pwm_L_B  = 115 + input_THROTTLE + roll_PID + pitch_PID;
-  pwm_L_F  = 115 + input_THROTTLE + roll_PID - pitch_PID;
+  frontLeftPW   = (throttleCtrl + roll_PID - pitch_PID) / 1;
+  rearLeftPW    = (throttleCtrl + roll_PID + pitch_PID) / 1;
+  frontRightPW  = (throttleCtrl - roll_PID - pitch_PID) / 1;
+  rearRightPW   = (throttleCtrl - roll_PID + pitch_PID) / 1;
+
+  Serial.print(" Pulse Widths: ");
+  Serial.print(frontLeftPW);
+  Serial.print(", ");
+  Serial.print(rearLeftPW);
+  Serial.print(", ");
+  Serial.print(frontRightPW);
+  Serial.print(", ");
+  Serial.println(rearRightPW); 
 
 
   /*------------------------ PWM Motor Control ------------------------*/
   // Set the pulse width for each motor
-  SoftPWMSetPercent(frontLeft, frontLeftPW);
-  SoftPWMSetPercent(rearLeft, rearLeftPW);
-  SoftPWMSetPercent(frontRight, frontRightPW);
-  SoftPWMSetPercent(rearRight, rearRightPW);
+  // SoftPWMSetPercent(frontLeft, frontLeftPW);
+  // SoftPWMSetPercent(rearLeft, rearLeftPW);
+  // SoftPWMSetPercent(frontRight, frontRightPW);
+  // SoftPWMSetPercent(rearRight, rearRightPW);
 }
