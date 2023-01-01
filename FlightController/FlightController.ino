@@ -1,35 +1,59 @@
 #include <Wire.h>
 #include <IBusBM.h>
+#include "SoftPWM.h"
 
-/*MPU-6050 gives you 16 bits data so you have to create some 16int constants
- * to store the data for accelerations and gyro*/
+/*------------------------ Global Variables and Declarations ------------------------*/
+
+// MPU-6050 gives you 16 bits data so you have to create some 16int constants to store the data for accelerations and gyro
 int16_t Acc_rawX, Acc_rawY, Acc_rawZ,Gyr_rawX, Gyr_rawY, Gyr_rawZ;
 
 float Acceleration_angle[2];
 float Gyro_angle[2];
 float Total_angle[2];
 
+// Store the elapsed time, current time, previous time
 float elapsedTime, time, timePrev;
-int i;
+
+// Variable for easy conversions
 float rad_to_deg = 180/3.141592654;
 
 
-// IBUS stuff
+// IBus Object and Serial
 IBusBM ibusRc;
 HardwareSerial& ibusRcSerial = Serial1;
 
-// READS DATA FROM THE IBUS -------------------------------------------
+// Associate each motor with its PWM pin
+int frontLeft  = 11;
+int frontRight = 13;
+int rearLeft   =  5;
+int rearRight  = 12; 
+
+// Initial pulse width for each motor (0 - 100)
+int frontLeftPW   = 0;
+int frontRightPW  = 0;
+int rearLeftPW    = 0;
+int rearRightPW   = 0;
+
+/*------------------------ Helper Functions ------------------------*/
+
+// readChannel(...)
+// Takes 4 parameters: channel number, lower limit, upper limit, and default output
+// Returns an output of the value for the particular channel mapped on the scale passed in via parameters
 int readChannel(byte channelInput, int minLimit, int  maxLimit, int defaultValue){
   uint16_t ch = ibusRc.readChannel(channelInput);
   if (ch < 100) return defaultValue;
   return map(ch, 1000, 2000, minLimit, maxLimit);
 }
 
-void setup() {
-  // IBUS SETUP ------------------------------------------------------
-  ibusRc.begin(ibusRcSerial);
-  // ------------------------------------------------------------------
 
+
+/*------------------------ Setup Function ------------------------*/
+
+void setup() {
+  // IBUS SETUP 
+  ibusRc.begin(ibusRcSerial);
+
+  // Wire Setup
   Wire.begin(); //begin the wire comunication
   Wire.beginTransmission(0x68);
   Wire.write(0x6B);
@@ -39,6 +63,7 @@ void setup() {
   time = millis(); //Start counting time in milliseconds
 }
 
+/*------------------------ Loop Function ------------------------*/
 void loop() {
 /////////////////////////////I M U/////////////////////////////////////
   timePrev = time;  // the previous time is stored before the actual time read
@@ -119,25 +144,37 @@ void loop() {
   Total_angle[0] = 0.98 *(Total_angle[0] + Gyro_angle[0]*elapsedTime) + 0.02*Acceleration_angle[0];
   /*---Y axis angle---*/
   Total_angle[1] = 0.98 *(Total_angle[1] + Gyro_angle[1]*elapsedTime) + 0.02*Acceleration_angle[1];
+
+  // Read the IBus channels for the controller input
+  // CHANNEL 2 THROTTLE, CHANNEL 3 YAW, CHANNEL 0 ROLL, CHANNEL 1 PITCH
+  int throttleCtrl = readChannel(2, 0, 80, 0);
+  int yawCtrl = readChannel(3, -100, 100, 0);
+  int rollCtrl = readChannel(0, -100, 100, 0);
+  int pitchCtrl = readChannel(1, -100, 100, 0);
+
+  /*------------------------ Serial Output for Testing------------------------*/
   
-  /*Now we have our angles in degree and values from -10º0 to 100º aprox*/
+  /*Now we have our angles in degree and values from -100 to 100 degrees*/
   Serial.print("ANLGE: ");
   Serial.print(Total_angle[1]);
   Serial.print(", ");
   Serial.print(Total_angle[0]);
 
-  // IBUS Test
-  //CHANNEL 2 THROTTLE, CHANNEL 3 YAW, CHANNEL 0 ROLL, CHANNEL 1 PITCH 
-  int throttle = readChannel(2, 0, 80, 0);
-  int yawCtrl = readChannel(3, -100, 100, 0);
-  int rollCtrl = readChannel(0, -100, 100, 0);
-  int pitchCtrl = readChannel(1, -100, 100, 0);
   Serial.print(" IBUS: ");
-  Serial.print(throttle);
+  Serial.print(throttleCtrl);
   Serial.print(", ");
   Serial.print(yawCtrl);
   Serial.print(", ");
   Serial.print(rollCtrl);
   Serial.print(", ");
   Serial.println(pitchCtrl);
+  
+  /*------------------------ PID ------------------------*/
+
+  /*------------------------ PWM Motor Control ------------------------*/
+  // Set the pulse width for each motor
+  SoftPWMSetPercent(frontLeft, frontLeftPW);
+  SoftPWMSetPercent(rearLeft, rearLeftPW);
+  SoftPWMSetPercent(frontRight, frontRightPW);
+  SoftPWMSetPercent(rearRight, rearRightPW);
 }
