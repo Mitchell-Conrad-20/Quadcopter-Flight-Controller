@@ -34,6 +34,29 @@ int frontRightPW  = 0;
 int rearLeftPW    = 0;
 int rearRightPW   = 0;
 
+/* PID Settings */
+//////////////////////////////PID FOR ROLL///////////////////////////
+float roll_PID, pwm_L_F, pwm_L_B, pwm_R_F, pwm_R_B, roll_error, roll_previous_error;
+float roll_pid_p=0;
+float roll_pid_i=0;
+float roll_pid_d=0;
+///////////////////////////////ROLL PID CONSTANTS////////////////////
+double roll_kp=0.7;//3.55
+double roll_ki=0.006;//0.003
+double roll_kd=1.2;//2.05
+float roll_desired_angle = 0;     //This is the angle in which we whant the
+
+//////////////////////////////PID FOR PITCH//////////////////////////
+float pitch_PID, pitch_error, pitch_previous_error;
+float pitch_pid_p=0;
+float pitch_pid_i=0;
+float pitch_pid_d=0;
+///////////////////////////////PITCH PID CONSTANTS///////////////////
+double pitch_kp=0.72;//3.55
+double pitch_ki=0.006;//0.003
+double pitch_kd=1.22;//2.05
+float pitch_desired_angle = 0;     //This is the angle in which we whant the
+
 /*------------------------ Helper Functions ------------------------*/
 
 // readChannel(...)
@@ -44,8 +67,6 @@ int readChannel(byte channelInput, int minLimit, int  maxLimit, int defaultValue
   if (ch < 100) return defaultValue;
   return map(ch, 1000, 2000, minLimit, maxLimit);
 }
-
-
 
 /*------------------------ Setup Function ------------------------*/
 
@@ -170,6 +191,58 @@ void loop() {
   Serial.println(pitchCtrl);
   
   /*------------------------ PID ------------------------*/
+
+  roll_desired_angle = map(rollCtrl,1000,2000,-10,10);
+  pitch_desired_angle = map(pitchCtrl,1000,2000,-10,10);
+
+  /*First calculate the error between the desired angle and 
+  *the real measured angle*/
+  roll_error = Total_angle_y - roll_desired_angle;
+  pitch_error = Total_angle_x - pitch_desired_angle;    
+  /*Next the proportional value of the PID is just a proportional constant
+  *multiplied by the error*/
+  roll_pid_p = roll_kp*roll_error;
+  pitch_pid_p = pitch_kp*pitch_error;
+  /*The integral part should only act if we are close to the
+  desired position but we want to fine tune the error. That's
+  why I've made a if operation for an error between -2 and 2 degree.
+  To integrate we just sum the previous integral value with the
+  error multiplied by  the integral constant. This will integrate (increase)
+  the value each loop till we reach the 0 point*/
+  if(-3 < roll_error <3)
+  {
+    roll_pid_i = roll_pid_i+(roll_ki*roll_error);  
+  }
+  if(-3 < pitch_error <3)
+  {
+    pitch_pid_i = pitch_pid_i+(pitch_ki*pitch_error);  
+  }
+  /*The last part is the derivate. The derivate acts upon the speed of the error.
+  As we know the speed is the amount of error that produced in a certain amount of
+  time divided by that time. For taht we will use a variable called previous_error.
+  We substract that value from the actual error and divide all by the elapsed time. 
+  Finnaly we multiply the result by the derivate constant*/
+  roll_pid_d = roll_kd*((roll_error - roll_previous_error)/elapsedTime);
+  pitch_pid_d = pitch_kd*((pitch_error - pitch_previous_error)/elapsedTime);
+  /*The final PID values is the sum of each of this 3 parts*/
+  roll_PID = roll_pid_p + roll_pid_i + roll_pid_d;
+  pitch_PID = pitch_pid_p + pitch_pid_i + pitch_pid_d;
+  /*We know taht the min value of PWM signal is 1000us and the max is 2000. So that
+  tells us that the PID value can/s oscilate more than -1000 and 1000 because when we
+  have a value of 2000us the maximum value taht we could substract is 1000 and when
+  we have a value of 1000us for the PWM signal, the maximum value that we could add is 1000
+  to reach the maximum 2000us. But we don't want to act over the entire range so -+400 should be enough*/
+  if(roll_PID < -400){roll_PID=-400;}
+  if(roll_PID > 400) {roll_PID=400; }
+  if(pitch_PID < -4000){pitch_PID=-400;}
+  if(pitch_PID > 400) {pitch_PID=400;}
+
+  /*Finnaly we calculate the PWM width. We sum the desired throttle and the PID value*/
+  pwm_R_F  = 115 + input_THROTTLE - roll_PID - pitch_PID;
+  pwm_R_B  = 115 + input_THROTTLE - roll_PID + pitch_PID;
+  pwm_L_B  = 115 + input_THROTTLE + roll_PID + pitch_PID;
+  pwm_L_F  = 115 + input_THROTTLE + roll_PID - pitch_PID;
+
 
   /*------------------------ PWM Motor Control ------------------------*/
   // Set the pulse width for each motor
